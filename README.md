@@ -66,6 +66,10 @@ npx skills add https://gitee.com/xtick/skills.git --skill xtick
 - `Bash(python:*)`: 允许执行 Python 代码
 - `Read`: 允许读取接口文档
 
+### 直接投喂AI文档
+可以直接给AI投喂MD接口文档： <br>
+接口文档路径：/references下 <br>
+
 ## API 限制说明
 
 [XTick 官方文档](http://www.xtick.top/apidoc)
