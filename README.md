@@ -11,7 +11,7 @@ XTick Skill是一个专业的股票实时数据API技能包，为AI助手（如L
 **核心特性**:
 - ✅ **全面的数据覆盖**: 沪深京A股、ETF基金、主流指数、港股、可转债
 - ✅ **丰富的数据类型**: 行情数据、财务数据、技术指标、热点数据、量化因子
-- ✅ **实时数据推送**: 支持WebSocket实时订阅推送
+- ✅ **双模式数据获取**: HTTP API查询 + WebSocket实时推送
 - ✅ **85+ API接口**: 涵盖股票分析的各个维度
 - ✅ **易于集成**: 提供Python SDK，开箱即用
 - ✅ **AI友好**: 专为智能体设计的Skill规范文档
@@ -70,15 +70,65 @@ class Config:
 cd DemoXtickPythonSkill
 
 # 安装依赖
-pip install requests pandas
+pip install requests pandas websocket-client
 
-# 运行完整示例
+# 运行HTTP API完整示例
 python xtick/scripts/XTickStockApiClient.py
+
+# 运行WebSocket客户端示例（实时数据接收）
+python xtick/scripts/XTickWebSocketClient.py
 ```
 
 ## 📚 功能概览
 
-XTick提供6大类共85+个API接口：
+XTick提供6大类共85+个HTTP API接口，以及WebSocket实时数据推送：
+
+### ⚡ WebSocket实时推送（新增）
+
+**特点**: 持续接收实时数据，无需频繁请求，毫秒级延迟
+
+**支持的订阅类型**:
+- **个股Tick**: `000001.SZ`, `600000.SH` - 按股票代码订阅（推荐）
+- **全市场Tick**: `tick.SZ.1`, `tick.SH.1`, `tick.BJ.1`, `tick.HK.3`
+- **指数Tick**: `tick.SZ.10`, `tick.SH.10`
+- **ETF Tick**: `tick.SZ.20`, `tick.SH.20`
+- **分钟K线（实时）**: `minute.SZ.1`, `minute.SH.1`, `minute.BJ.1`, `minute.HK.3`
+- **量化因子（实时）**: `quant.time.1`
+- **量化因子（每分钟）**: `quant.data.1`
+- **竞价数据**: `bid.1` - 集合竞价期间数据
+
+**使用场景**:
+- 实时监控多只股票价格变化
+- 构建量化交易系统数据源
+- 开发盯盘工具（五档行情、成交统计）
+- 捕捉涨停板/跌停板机会
+- 实时获取市场情绪和资金流向
+
+**快速开始**:
+
+```python
+import json
+import urllib
+from xtick.scripts.XTickWebSocketClient import XTickWebSocketClient
+from xtick.scripts.Config import Config
+
+# 订阅多个股票的实时Tick数据
+auth_codes = ["000001.SZ", "600000.SH", "600519.SH"]
+
+user_info = json.dumps({
+    "token": Config.TOKEN,
+    "authCodes": auth_codes
+})
+
+user_encoded = urllib.parse.quote(user_info)
+endpoint_uri = f"ws://ws.xtick.top/ws/{user_encoded}"
+
+# 创建并启动WebSocket客户端
+xTickClient = XTickWebSocketClient(endpoint_uri)
+xTickClient.start()  # 开始接收实时数据
+```
+
+详细文档: [WebSocket接入指南](xtick/references/websocket.md)
 
 ### 1️⃣ 行情数据接口 (8个)
 - 股票列表、交易日历
@@ -172,7 +222,76 @@ result = XTickHotApi.getMoneyFlow(
 )
 ```
 
-### 示例4: AI助手自然语言交互
+### 示例4: WebSocket实时数据订阅（新增）
+
+**基础示例：订阅个股Tick数据**
+
+```python
+import json
+import urllib
+from xtick.scripts.XTickWebSocketClient import XTickWebSocketClient
+from xtick.scripts.Config import Config
+
+# 订阅多个股票的实时Tick数据
+auth_codes = ["000001.SZ", "600000.SH", "600519.SH"]
+
+user_info = json.dumps({
+    "token": Config.TOKEN,
+    "authCodes": auth_codes
+})
+
+user_encoded = urllib.parse.quote(user_info)
+endpoint_uri = f"ws://ws.xtick.top/ws/{user_encoded}"
+
+# 创建并启动WebSocket客户端
+xTickClient = XTickWebSocketClient(endpoint_uri)
+xTickClient.start()  # 开始接收实时数据
+```
+
+**高级示例：多市场订阅**
+
+```python
+# 订阅多个市场的股票（需要相应权限）
+auth_codes = [
+    "000001.SZ",   # 深交所A股
+    "600000.SH",   # 上交所A股
+    "00001.HK",    # 港交所港股
+    "920001.BJ",   # 北交所A股
+    "000001.SH",   # 上证指数
+    "510300.SH"    # 上交所ETF
+]
+
+user_info = json.dumps({
+    "token": Config.TOKEN,
+    "authCodes": auth_codes
+})
+
+user_encoded = urllib.parse.quote(user_info)
+endpoint_uri = f"ws://ws.xtick.top/ws/{user_encoded}"
+
+xTickClient = XTickWebSocketClient(endpoint_uri)
+xTickClient.start()
+```
+
+**其他订阅类型示例**:
+
+```python
+# 订阅整个市场的tick数据
+auth_codes = ["tick.SZ.1", "tick.SH.1"]
+
+# 订阅分钟K线数据（实时推送）
+auth_codes = ["minute.SZ.1", "minute.SH.1"]
+
+# 订阅量化因子数据（实时推送）
+auth_codes = ["quant.time.1"]
+
+# 订阅集合竞价数据
+auth_codes = ["bid.1"]
+```
+
+**更多订阅类型请参考**: [WebSocket接入指南](xtick/references/websocket.md)
+
+### 示例5: AI助手自然语言交互
 
 当在支持Skills的AI助手中加载本技能后，可以直接用自然语言询问：
 
@@ -215,10 +334,12 @@ DemoXtickPythonSkill/
 ├── xtick/
 │   ├── SKILL.md                    # Skill技能文档（AI助手使用）
 │   ├── references/
-│   │   └── apidoc.md               # 详细API接口文档
+│   │   ├── apidoc.md               # 详细API接口文档
+│   │   └── websocket.md            # WebSocket接入指南（新增）
 │   └── scripts/
 │       ├── Config.py               # 配置文件（Token设置）
-│       ├── XTickStockApiClient.py  # 完整调用示例
+│       ├── XTickStockApiClient.py  # HTTP API完整调用示例
+│       ├── XTickWebSocketClient.py # WebSocket客户端示例（新增）
 │       ├── api/
 │       │   ├── XTickMarketApi.py   # 行情数据API
 │       │   ├── XTickWatchApi.py    # 盯盘数据API
@@ -226,7 +347,7 @@ DemoXtickPythonSkill/
 │       │   ├── XTickHotApi.py      # 热点数据API
 │       │   ├── XTickQuantApi.py    # 量化因子API
 │       │   ├── XTickIndicatorApi.py # 金融指标API
-│       │   └── XTickWebSocketApi.py # WebSocket API
+│       │   └── XTickWebSocketApi.py # WebSocket API封装
 │       └── util/
 │           ├── XTickUtil.py        # 工具函数
 │           └── DataConvert.py      # 数据转换
@@ -237,8 +358,10 @@ DemoXtickPythonSkill/
 ## 📖 文档说明
 
 - **[SKILL.md](xtick/SKILL.md)**: Skill技能文档，教AI助手如何使用XTick API
-- **[apidoc.md](xtick/references/apidoc.md)**: 详细的API接口文档，包含所有参数说明
-- **[XTickStockApiClient.py](xtick/scripts/XTickStockApiClient.py)**: 完整的代码示例，展示所有接口的调用方法
+- **[apidoc.md](xtick/references/apidoc.md)**: 详细的HTTP API接口文档，包含所有参数说明
+- **[websocket.md](xtick/references/websocket.md)**: WebSocket实时数据订阅指南（新增）
+- **[XTickStockApiClient.py](xtick/scripts/XTickStockApiClient.py)**: HTTP API完整代码示例
+- **[XTickWebSocketClient.py](xtick/scripts/XTickWebSocketClient.py)**: WebSocket客户端完整示例（新增）
 
 ## ⚠️ 注意事项
 
@@ -255,17 +378,38 @@ DemoXtickPythonSkill/
 
 A: 访问 [XTick官网](http://www.xtick.top/user/account) 注册账号，登录后在个人中心获取。
 
+**Q: HTTP API和WebSocket有什么区别？**
+
+A: 
+- **HTTP API**: 适合单次查询、历史数据获取，按需请求
+- **WebSocket**: 适合实时监控、持续数据流，一次连接持续接收
+
+**Q: 什么时候使用WebSocket？**
+
+A: 以下场景推荐使用WebSocket:
+- 需要实时监控多只股票的价格变化
+- 构建量化交易系统，需要持续的数据源
+- 开发盯盘工具，需要五档行情实时更新
+- 希望减少API调用次数，降低服务器压力
+
 **Q: 支持哪些编程语言？**
 
-A: 目前提供Python SDK，其他语言可直接调用HTTP API。
+A: 目前提供Python SDK，其他语言可直接调用HTTP API或使用WebSocket协议。
 
 **Q: 数据更新频率是多少？**
 
-A: 实时数据约2-3秒更新一次，财务数据盘后更新。
+A: 
+- HTTP实时数据: 约2-3秒更新一次
+- WebSocket实时数据: 毫秒级推送，几乎无延迟
+- 财务数据: 盘后更新
 
 **Q: 有调用次数限制吗？**
 
-A: 不同权限等级有不同的调用限额，详见官网说明。
+A: 不同权限等级有不同的调用限额，详见官网说明。WebSocket连接数也有限制。
+
+**Q: WebSocket连接断开怎么办？**
+
+A: 建议在`on_close`回调中实现自动重连机制，参考[WebSocket接入指南](xtick/references/websocket.md)中的示例。
 
 **Q: 可以用于商业用途吗？**
 

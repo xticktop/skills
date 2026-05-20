@@ -1,6 +1,6 @@
 ---
 name: xtick
-description: XTick股票实时数据API技能，提供沪深京A股、ETF、指数、港股等金融数据的获取能力，包括行情数据、财务数据、技术指标、热点数据等85+接口
+description: XTick股票实时数据API技能，提供沪深京A股、ETF、指数、港股等金融数据的获取能力，包括行情数据、财务数据、技术指标、热点数据等85+接口，支持WebSocket实时数据推送
 ---
 
 # XTick 股票数据技能
@@ -16,6 +16,7 @@ XTick是一个专业的股票实时数据API平台，提供全面、准确、稳
 - 🔥 市场热点追踪（龙虎榜、资金流向、连板天梯）
 - 🎯 量化因子数据（涨速、换手率、市盈率等）
 - 📰 新闻资讯聚合（主流财经媒体）
+- ⚡ **WebSocket实时推送**（全市场实时数据订阅）
 
 ## 🚀 快速开始
 
@@ -33,7 +34,194 @@ pip install requests pandas
 2. 登录后在个人中心获取API Token
 3. 将Token配置到代码中使用
 
-### 3. Python调用示例
+### 3. WebSocket快速开始（新增）
+
+**环境准备**:
+
+```bash
+# 安装WebSocket依赖
+pip install websocket-client requests
+```
+
+**基础示例：订阅个股Tick数据**
+
+```python
+import json
+import urllib
+from xtick.scripts.XTickWebSocketClient import XTickWebSocketClient
+from xtick.scripts.Config import Config
+
+# 定义要订阅的股票代码列表
+auth_codes = ["000001.SZ", "600000.SH"]  # 平安银行、浦发银行
+
+# 构建用户信息JSON
+user_info = json.dumps({
+    "token": Config.TOKEN,
+    "authCodes": auth_codes
+})
+
+# URL编码用户信息
+user_encoded = urllib.parse.quote(user_info)
+endpoint_uri = f"ws://ws.xtick.top/ws/{user_encoded}"
+
+# 创建并启动WebSocket客户端
+xTickClient = XTickWebSocketClient(endpoint_uri)
+xTickClient.start()  # 开始接收实时数据
+```
+
+**高级示例：多市场订阅**
+
+```python
+# 订阅多个市场的股票（需要相应权限）
+auth_codes = [
+    "000001.SZ",   # 深交所A股
+    "600000.SH",   # 上交所A股
+    "00001.HK",    # 港交所港股
+    "920001.BJ",   # 北交所A股
+    "000001.SH",   # 上证指数
+    "510300.SH"    # 上交所ETF
+]
+
+user_info = json.dumps({
+    "token": Config.TOKEN,
+    "authCodes": auth_codes
+})
+
+user_encoded = urllib.parse.quote(user_info)
+endpoint_uri = f"ws://ws.xtick.top/ws/{user_encoded}"
+
+xTickClient = XTickWebSocketClient(endpoint_uri)
+xTickClient.start()
+```
+
+**支持的订阅类型**:
+
+- **个股Tick数据**: `000001.SZ`, `600000.SH` - 按股票代码订阅（推荐方式）
+- **全市场Tick**: `tick.SZ.1`, `tick.SH.1`, `tick.BJ.1`, `tick.HK.3`
+- **指数Tick**: `tick.SZ.10`, `tick.SH.10`
+- **ETF Tick**: `tick.SZ.20`, `tick.SH.20`
+- **分钟K线（实时）**: `minute.SZ.1`, `minute.SH.1`, `minute.BJ.1`, `minute.HK.3`
+- **量化因子（实时）**: `quant.time.1`
+- **量化因子（每分钟）**: `quant.data.1`
+- **竞价数据**: `bid.1` - 集合竞价期间数据
+
+**WebSocket客户端实现详解**:
+
+```python
+import json
+import urllib
+import websocket
+from xtick.scripts.Config import Config
+from xtick.scripts.util import XTickUtil
+
+class XTickWebSocketClient(object):
+    def __init__(self, url):
+        self.url = url
+        self.ws = None
+
+    def on_open(self, ws):
+        """
+        WebSocket连接建立时的回调函数
+        
+        参数:
+            ws: WebSocketApp对象
+        """
+        print('A new WebSocketApp is opened and subscribed!')
+
+    def on_data(self, ws, string, type, continue_flag):
+        """
+        接收数据时的回调函数
+        
+        参数:
+            ws: WebSocketApp对象
+            string: 从服务器接收的数据（utf-8字符串或二进制数据）
+            type: 数据类型，可能是 ABNF.OPCODE_TEXT 或 ABNF.OPCODE_BINARY
+            continue_flag: continuation flag，如果为0表示数据继续
+        """
+        if type == websocket.ABNF.OPCODE_BINARY:
+            # 处理二进制数据（可能经过gzip或zip压缩）
+            packet = XTickUtil.process_data(string)
+            print(f"Received data: {packet}")
+        elif type == websocket.ABNF.OPCODE_TEXT:
+            # 处理文本数据
+            print(f"Received data: {string}")
+
+    def on_error(self, ws, error):
+        """
+        发生错误时的回调函数
+        
+        参数:
+            ws: WebSocketApp对象
+            error: 异常对象
+        """
+        print(error)
+
+    def on_close(self, ws, close_status_code, close_msg):
+        """
+        连接关闭时的回调函数
+        
+        参数:
+            ws: WebSocketApp对象
+            close_status_code: 关闭状态码
+            close_msg: 关闭消息
+        """
+        print('The connection is closed!')
+        # 可选：实现自动重连
+        # import time
+        # time.sleep(3)
+        # self.start()
+
+    def start(self):
+        """启动WebSocket连接"""
+        self.ws = websocket.WebSocketApp(
+            self.url,
+            on_open=self.on_open,
+            on_data=self.on_data,
+            on_error=self.on_error,
+            on_close=self.on_close,
+        )
+        self.ws.run_forever()
+```
+
+**数据处理说明**:
+
+XTickUtil模块提供自动解压缩功能，支持gzip和zip格式：
+- 当接收到二进制数据（`OPCODE_BINARY`）时，自动调用 `XTickUtil.process_data()` 处理
+- 检测数据压缩格式（通过文件头字节判断）
+- 如果是gzip格式，使用gzip解压
+- 如果是zip格式，从zip中提取JSON文件
+- 否则直接解码为UTF-8字符串
+- 处理后的数据为JSON格式，可直接解析使用
+
+**注意事项**:
+
+1. **权限限制**：新用户默认可以订阅北交所的tick行情数据，具体权限请参考XTick官网
+2. **网络连接**：当前使用非加密连接（`ws://`），确保网络稳定
+3. **数据量控制**：推荐使用个股代码订阅而非全市场订阅，避免性能问题
+4. **错误处理**：建议在 `on_close` 回调中实现自动重连逻辑
+5. **Token安全**：妥善保管API Token，建议存储在环境变量或配置文件中
+
+**常见问题**:
+
+- **Q: 连接失败怎么办？**  
+  A: 检查Token是否正确、网络连接是否正常、防火墙是否阻止WebSocket连接
+
+- **Q: 为什么我的连接立即关闭了？**  
+  A: 可能Token无效、authCodes格式错误或包含无权访问的代码，检查 `on_error` 回调中的错误信息
+
+- **Q: 如何实现断线重连？**  
+  A: 在 `on_close` 回调中添加重连逻辑（见上方代码注释）
+
+- **Q: 如果创建WebSocket客户端失败怎么办？**  
+  A: 参考官方开源项目获取完整示例代码：
+  - Skill项目: https://github.com/xticktop/skills
+  - Python版项目: https://github.com/xticktop/DemoXtickPythonSkill
+  - Java版项目: https://github.com/xticktop/DemoXtickJava
+  - 主项目: https://github.com/xticktop/xtick
+
+详细文档请参考: [WebSocket接入指南](references/websocket.md)
+
+### 4. Python HTTP API调用示例
 
 ```python
 from xtick.scripts.api import XTickMarketApi
@@ -287,7 +475,7 @@ XTick提供了以下Python API模块：
 | `XTickHotApi` | 热点数据接口 | 龙虎榜、资金流向、新闻资讯 |
 | `XTickQuantApi` | 量化因子接口 | 实时/历史量化因子数据 |
 | `XTickIndicatorApi` | 金融指标接口 | MACD、KDJ、RSI等100+指标 |
-| `XTickWebSocketApi` | WebSocket接口 | 实时数据订阅推送 |
+| `XTickWebSocketClient` | **WebSocket客户端** | **实时数据订阅推送（新增）** |
 
 ## ⚠️ 注意事项
 
@@ -301,8 +489,10 @@ XTick提供了以下Python API模块：
 ## 📖 完整示例
 
 完整的API调用示例请参考：
-- [XTickStockApiClient.py](scripts/XTickStockApiClient.py) - 包含所有接口的调用示例
-- [详细API文档](references/apidoc.md) - 完整的接口参数说明
+- [XTickStockApiClient.py](scripts/XTickStockApiClient.py) - 包含所有HTTP接口的调用示例
+- [XTickWebSocketClient.py](scripts/XTickWebSocketClient.py) - WebSocket客户端完整示例
+- [详细API文档](references/apidoc.md) - 完整的HTTP接口参数说明
+- [WebSocket接入指南](references/websocket.md) - WebSocket实时数据订阅详解
 
 ## 🔗 相关链接
 
@@ -316,10 +506,18 @@ XTick提供了以下Python API模块：
 当用户询问股票相关数据时：
 
 1. **识别意图**: 确定用户需要什么类型的数据（行情、财务、技术指标等）
-2. **选择接口**: 根据需求选择合适的API接口
+2. **选择接口**: 
+   - 历史数据或单次查询 → 使用HTTP API
+   - 实时数据持续监控 → 使用WebSocket订阅
 3. **确认参数**: 向用户确认必要的参数（股票代码、日期范围等）
 4. **调用API**: 使用对应的Python API模块获取数据
 5. **解释结果**: 用通俗易懂的语言解释返回的数据
+
+**WebSocket使用场景**:
+- 实时监控多只股票的价格变化
+- 构建量化交易系统的实时数据源
+- 盯盘工具开发（五档行情、成交统计）
+- 实时捕捉涨停板、跌停板机会
 
 **示例对话**:
 
